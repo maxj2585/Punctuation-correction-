@@ -22,11 +22,11 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
       - name: Build and test with readable diagnostics
@@ -34,24 +34,24 @@ jobs:
         run: bash scripts/ipad-build.sh
       - name: Save build logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ipad-build-diagnostics
           path: diagnostics/
           if-no-files-found: ignore
           retention-days: 7
       - name: Save built website
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: punctuation-studio-built-site
           path: site
       - name: Configure GitHub Pages
         id: pages
         if: success() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'build-and-deploy')
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
       - name: Upload Pages website
         if: success() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'build-and-deploy')
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
       - name: iPad-friendly run summary
@@ -80,14 +80,14 @@ jobs:
   deploy:
     needs: build
     if: github.event_name != 'workflow_dispatch' || inputs.mode == 'build-and-deploy'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Publish website
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
       - name: Deployment summary
         if: always()
         env:
