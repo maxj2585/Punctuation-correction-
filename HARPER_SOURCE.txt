@@ -1,0 +1,6 @@
+Project: Harper
+Upstream: https://github.com/Automattic/harper
+Revision: 04ba445a0ce2fbfc634c36ffe8623892ee3f8952
+Copy: full Git-tracked source snapshot; Git history and external submodule/LFS payloads are not imported.
+Local source modifications: none at import.
+Independent website name: Punctuation Studio
