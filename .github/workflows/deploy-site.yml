@@ -1,0 +1,61 @@
+name: Build and deploy Punctuation Studio
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'scripts/**', '.github/workflows/deploy-site.yml', 'vendor/harper/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: punctuation-pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install WebAssembly build tools
+        run: |
+          rustup update stable
+          rustup target add wasm32-unknown-unknown --toolchain stable
+          cargo install wasm-pack --locked
+      - name: Build the copied Harper source
+        working-directory: vendor/harper/harper-wasm
+        run: wasm-pack build --target web --release --no-opt --no-default-features --out-name harper_wasm --out-dir "$GITHUB_WORKSPACE/site/engine"
+      - name: Preserve engine license and source attribution
+        run: |
+          cp vendor/harper/LICENSE site/HARPER-LICENSE.txt
+          cp HARPER_SOURCE.txt site/SOURCE.txt
+          touch site/.nojekyll
+      - name: Install browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/browser" playwright@1.60.0
+          "$RUNNER_TEMP/browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Run browser smoke tests
+        run: |
+          python3 -m http.server 8080 --directory site > /tmp/punctuation-http.log 2>&1 &
+          node scripts/smoke.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: punctuation-studio-built-site
+          path: site
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish website
+        id: deployment
+        uses: actions/deploy-pages@v4
