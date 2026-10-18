@@ -1,0 +1,39 @@
+name: Import full Harper source
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/import-harper.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: import-harper
+  cancel-in-progress: false
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Copy pinned upstream source without executing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -e vendor/harper ]; then
+            echo 'vendor/harper already exists; refusing to overwrite it.'
+            exit 1
+          fi
+          upstream=$(mktemp -d)
+          git -C "$upstream" init
+          git -C "$upstream" remote add origin https://github.com/Automattic/harper.git
+          git -C "$upstream" fetch --depth=1 origin 04ba445a0ce2fbfc634c36ffe8623892ee3f8952
+          mkdir -p vendor/harper
+          git -C "$upstream" archive FETCH_HEAD | tar -x -C vendor/harper
+          test -s vendor/harper/LICENSE
+          printf '%s\n' 'Project: Harper' 'Upstream: https://github.com/Automattic/harper' 'Revision: 04ba445a0ce2fbfc634c36ffe8623892ee3f8952' 'Copy: full Git-tracked source snapshot; Git history and external submodule/LFS payloads are not imported.' 'Local source modifications: none at import.' 'Independent website name: Punctuation Studio' > HARPER_SOURCE.txt
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -f vendor/harper HARPER_SOURCE.txt
+          git commit -m "Vendor complete Harper source snapshot for Punctuation Studio"
+          git push origin HEAD:main
