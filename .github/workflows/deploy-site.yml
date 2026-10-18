@@ -4,12 +4,21 @@ on:
     branches: [main]
     paths: ['site/**', 'scripts/**', '.github/workflows/deploy-site.yml', 'vendor/harper/**']
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Choose what to do from your iPad'
+        type: choice
+        required: true
+        default: build-and-deploy
+        options:
+          - build-and-deploy
+          - check-only
 permissions:
   contents: read
   pages: write
   id-token: write
 concurrency:
-  group: punctuation-pages
+  group: punctuation-pages-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build:
@@ -20,37 +29,57 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install WebAssembly build tools
-        run: |
-          rustup update stable
-          rustup target add wasm32-unknown-unknown --toolchain stable
-          cargo install wasm-pack --locked
-      - name: Build the copied Harper source
-        working-directory: vendor/harper/harper-wasm
-        run: wasm-pack build --target web --release --no-opt --no-default-features --out-name harper_wasm --out-dir "$GITHUB_WORKSPACE/site/engine"
-      - name: Preserve engine license and source attribution
-        run: |
-          cp vendor/harper/LICENSE site/HARPER-LICENSE.txt
-          cp HARPER_SOURCE.txt site/SOURCE.txt
-          touch site/.nojekyll
-      - name: Install browser test tools
-        run: |
-          npm install --prefix "$RUNNER_TEMP/browser" playwright@1.60.0
-          "$RUNNER_TEMP/browser/node_modules/.bin/playwright" install --with-deps chromium
-      - name: Run browser smoke tests
-        run: |
-          python3 -m http.server 8080 --directory site > /tmp/punctuation-http.log 2>&1 &
-          node scripts/smoke.mjs
-      - uses: actions/upload-artifact@v4
+      - name: Build and test with readable diagnostics
+        id: compile
+        run: bash scripts/ipad-build.sh
+      - name: Save build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipad-build-diagnostics
+          path: diagnostics/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Save built website
+        uses: actions/upload-artifact@v4
         with:
           name: punctuation-studio-built-site
           path: site
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - name: Configure GitHub Pages
+        id: pages
+        if: success() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'build-and-deploy')
+        uses: actions/configure-pages@v5
+      - name: Upload Pages website
+        if: success() && (github.event_name != 'workflow_dispatch' || inputs.mode == 'build-and-deploy')
+        uses: actions/upload-pages-artifact@v3
         with:
           path: site
+      - name: iPad-friendly run summary
+        if: always()
+        env:
+          BUILD_RESULT: ${{ steps.compile.outcome }}
+          PAGES_RESULT: ${{ steps.pages.outcome }}
+        run: |
+          {
+            echo '# Punctuation Studio — iPad report'
+            echo "Build and browser tests: $BUILD_RESULT"
+            echo "Pages configuration: $PAGES_RESULT"
+            if [ -f diagnostics/report.md ]; then cat diagnostics/report.md; fi
+            echo ''
+            if [ "$PAGES_RESULT" = failure ]; then
+              echo 'Pages configuration failed. Check Settings → Pages and choose GitHub Actions as the publishing source. Other permissions or plan restrictions may also apply; inspect the Configure GitHub Pages step for the exact error.'
+            fi
+            echo ''
+            echo '[Open this run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})'
+            echo '[Start a new run](https://github.com/${{ github.repository }}/actions/workflows/deploy-site.yml)'
+            echo '[Edit workflow](https://github.com/${{ github.repository }}/edit/main/.github/workflows/deploy-site.yml)'
+            echo '[Pages settings](https://github.com/${{ github.repository }}/settings/pages)'
+            echo ''
+            echo 'If this run failed, copy this report or send a screenshot. Logs are also available in the ipad-build-diagnostics artifact. These controls do not automatically repair code errors.'
+          } >> "$GITHUB_STEP_SUMMARY"
   deploy:
     needs: build
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'build-and-deploy'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -59,3 +88,19 @@ jobs:
       - name: Publish website
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Deployment summary
+        if: always()
+        env:
+          DEPLOY_RESULT: ${{ steps.deployment.outcome }}
+          SITE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          {
+            echo '# Punctuation Studio — deployment'
+            echo "Deployment result: $DEPLOY_RESULT"
+            if [ "$DEPLOY_RESULT" = success ]; then
+              echo "Published URL: $SITE_URL"
+              echo 'Open the URL and confirm the engine loads before treating the site as verified.'
+            else
+              echo 'Open the Publish website step and copy its error message. A successful build alone does not mean the site was published.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
