@@ -19,6 +19,22 @@ try {
   await page.waitForSelector('.issue button');
   await page.locator('.issue button').first().click();
   await page.waitForFunction(() => document.querySelector('#text').value === 'Hello, world!');
+  // Sentence-start capitalization now passes the punctuation-mode filter.
+  await page.fill('#text', 'lets meet tomorrow at 5');
+  await page.click('#check');
+  await page.waitForSelector('.issue button', { timeout: 30000 });
+  await page.locator('.issue button').first().click();
+  await page.waitForFunction(() => document.querySelector('#text').value === 'Lets meet tomorrow at 5');
+  // The follow-up check offers the missing ending period; applying it completes the sentence.
+  await page.waitForSelector('.issue button', { timeout: 30000 });
+  await page.locator('.issue button').first().click();
+  await page.waitForFunction(() => document.querySelector('#text').value === 'Lets meet tomorrow at 5.');
+  // Two closing dots get a one-dot fix alongside the engine's ellipsis suggestion.
+  await page.fill('#text', 'This works..');
+  await page.click('#check');
+  await page.waitForFunction(() => [...document.querySelectorAll('.issue button')].some((b) => b.textContent === 'Apply: .'), { timeout: 30000 });
+  await page.locator('.issue button', { hasText: 'Apply: .' }).first().click();
+  await page.waitForFunction(() => document.querySelector('#text').value === 'This works.');
   await page.setViewportSize({ width: 390, height: 844 });
   if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Mobile overflow');
   console.log('Engine, grammar correction, undo, punctuation correction, and mobile layout passed.');

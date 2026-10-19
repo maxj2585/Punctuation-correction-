@@ -4,9 +4,9 @@ try { await init(); linter = Linter.new(Dialect.American); postMessage({ type: '
 catch (error) { postMessage({ type: 'fatal', error: String(error) }); }
 
 // Harper lint kinds that are punctuation-related by category.
-const PUNCTUATION_KINDS = /punctuation|formatting|spacing/i;
+const PUNCTUATION_KINDS = /punctuation|formatting|spacing|capitalization/i;
 // Messages that describe a punctuation or spacing problem, whatever the kind.
-const PUNCTUATION_MESSAGE = /punctuat|comma|period|full stop|apostrophe|quotation|quote mark|hyphen|dash|colon|semicolon|ellipsis|question mark|exclamation|bracket|parenthes|spac(e|ing)|whitespace/i;
+const PUNCTUATION_MESSAGE = /punctuat|comma|period|full stop|apostrophe|quotation|quote mark|hyphen|dash|colon|semicolon|ellipsis|question mark|exclamation|bracket|parenthes|spac(e|ing)|whitespace|capitaliz|uppercase/i;
 // Strip punctuation, symbols, and whitespace so we can tell if a fix only touches those.
 const stripPunctuation = (value) => value.replace(/[\p{P}\p{S}\p{Z}\s]/gu, '');
 
@@ -19,6 +19,13 @@ function isPunctuationOnlyFix(flagged, suggestions) {
     if (kind === 2) return stripPunctuation(text) === ''; // InsertAfter: inserting punctuation/space only
     return stripPunctuation(text) === base; // Replace: letters unchanged
   });
+}
+
+// True when the writing ends without terminal punctuation, ignoring closing quotes and brackets.
+function missingEndPunctuation(text) {
+  const trimmed = text.replace(/[\s"'”’»)\]]+$/u, '');
+  if (!trimmed) return false;
+  return /[\p{L}\p{N}]/u.test(trimmed.slice(-1));
 }
 
 onmessage = ({ data }) => {
@@ -45,9 +52,24 @@ onmessage = ({ data }) => {
             || PUNCTUATION_MESSAGE.test(message)
             || isPunctuationOnlyFix(flagged, suggestions);
           if (!related) continue;
+          // "word.." at the end of a sentence needs one dot, not three;
+          // offer the single-dot fix next to the engine's ellipsis suggestion.
+          if (flagged === '..' && suggestions.some((s) => s.text === '...')) {
+            suggestions.push({ kind: 0, text: '.' });
+          }
         }
         issues.push({ kind, start, end, message, suggestions });
       } finally { lint.free(); }
+    }
+    // Suggest the missing period when punctuation mode leaves the text without an ending mark.
+    if (data.mode === 'punctuation' && missingEndPunctuation(data.text)) {
+      issues.push({
+        kind: 'Punctuation',
+        start: data.text.length,
+        end: data.text.length,
+        message: 'This text is missing its ending punctuation.',
+        suggestions: [{ kind: 2, text: '.' }],
+      });
     }
     postMessage({ type: 'results', id: data.id, issues });
   } catch (error) { postMessage({ type: 'error', id: data.id, error: String(error) }); }
