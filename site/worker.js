@@ -51,12 +51,17 @@ function repeatedEndMarkIssues(chars, issues) {
 
 // A comma or colon must be followed by a space before the next word; the engine
 // already covers . ! ? ;. Digits stay untouched (1,000, 9:30), and URLs fail the
-// letter test on their own (https://).
+// letter test on their own (https://). Skip a spot the engine already flagged so
+// the same fix never shows twice.
 function missingSpaceIssues(chars, issues) {
+  const covered = new Set(issues
+    .filter(({ suggestions }) => suggestions.some((s) => s.kind === 2 && s.text === ' '))
+    .map((issue) => issue.start));
   for (let i = 0; i < chars.length - 1; i += 1) {
     const mark = chars[i];
     if (mark !== ',' && mark !== ':') continue;
     if (!/\p{L}/u.test(chars[i + 1])) continue;
+    if (covered.has(i + 1)) continue;
     issues.push({
       kind: 'Punctuation',
       start: i + 1, end: i + 1,
