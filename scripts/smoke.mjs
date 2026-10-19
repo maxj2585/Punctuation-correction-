@@ -20,15 +20,15 @@ try {
   await page.locator('.issue button').first().click();
   await page.waitForFunction(() => document.querySelector('#text').value === 'Hello, world!');
   // Sentence-start capitalization now passes the punctuation-mode filter.
-  await page.fill('#text', 'lets meet tomorrow at 5');
+  await page.fill('#text', 'lets meet tomorrow at 5 for dinner');
   await page.click('#check');
   await page.waitForSelector('.issue button', { timeout: 30000 });
   await page.locator('.issue button').first().click();
-  await page.waitForFunction(() => document.querySelector('#text').value === 'Lets meet tomorrow at 5');
+  await page.waitForFunction(() => document.querySelector('#text').value === 'Lets meet tomorrow at 5 for dinner');
   // The follow-up check offers the missing ending period; applying it completes the sentence.
   await page.waitForSelector('.issue button', { timeout: 30000 });
   await page.locator('.issue button').first().click();
-  await page.waitForFunction(() => document.querySelector('#text').value === 'Lets meet tomorrow at 5.');
+  await page.waitForFunction(() => document.querySelector('#text').value === 'Lets meet tomorrow at 5 for dinner.');
   // Two closing dots get a one-dot fix alongside the engine's ellipsis suggestion.
   await page.fill('#text', 'This works..');
   await page.click('#check');
