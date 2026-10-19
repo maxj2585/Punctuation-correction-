@@ -5,6 +5,8 @@ try {
   const page = await browser.newPage();
   await page.goto('http://127.0.0.1:8080/');
   await page.waitForFunction(() => document.querySelector('#check').textContent === 'Check text', { timeout: 120000 });
+  // The offline service worker installs and activates on the served site.
+  await page.waitForFunction(() => navigator.serviceWorker.getRegistrations().then((regs) => regs.length > 0), { timeout: 30000 });
   await page.selectOption('#mode', 'all');
   await page.fill('#text', 'The the problem is here.');
   await page.click('#check');

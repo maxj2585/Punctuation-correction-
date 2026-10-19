@@ -1,7 +1,10 @@
 const $ = (id) => document.getElementById(id);
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch((error) => console.error('Offline cache unavailable.', error));
+}
 const text = $('text');
 let worker = null;
-try { worker = new Worker(new URL('./worker.js?v=7', import.meta.url), { type: 'module' }); }
+try { worker = new Worker(new URL('./worker.js?v=8', import.meta.url), { type: 'module' }); }
 catch { worker = null; }
 let ready = false, revision = 0, pending = null, history = [], autoFix = false, fixBudget = 0;
 const status = (message) => { $('status').textContent = message; };
