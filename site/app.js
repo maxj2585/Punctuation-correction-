@@ -1,8 +1,18 @@
 const $ = (id) => document.getElementById(id);
 const text = $('text');
-const worker = new Worker(new URL('./worker.js?v=6', import.meta.url), { type: 'module' });
+let worker = null;
+try { worker = new Worker(new URL('./worker.js?v=7', import.meta.url), { type: 'module' }); }
+catch { worker = null; }
 let ready = false, revision = 0, pending = null, history = [], autoFix = false, fixBudget = 0;
 const status = (message) => { $('status').textContent = message; };
+const engineDead = () => {
+  ready = false; pending = null;
+  $('check').disabled = true; $('check').textContent = 'Engine unavailable';
+  $('fixall').disabled = true;
+  status('This browser cannot start the engine. Reload, or try a current Chrome, Safari, Edge or Firefox.');
+};
+setTimeout(() => { if (!ready) status('Still loading the engine. If this message stays, reload the page or try another browser.'); }, 30000);
+if (!worker) engineDead();
 function invalidate() {
   revision++; pending = null;
   $('check').disabled = !ready; $('check').textContent = ready ? 'Check text' : 'Loading engine…';
@@ -27,7 +37,7 @@ function applyFix(source, uStart, uEnd, suggestion) {
   text.value = source.slice(0, start) + suggestion.text + source.slice(uEnd);
   invalidate(); status('Correction applied.'); check();
 }
-worker.onmessage = ({ data }) => {
+if (worker) worker.onmessage = ({ data }) => {
   if (data.type === 'ready') { ready = true; invalidate(); status('Ready. Your writing stays on your device.'); return; }
   if (data.type === 'fatal') { autoFix = false; status('Engine could not load. Reload to retry.'); console.error(data.error); return; }
   if (!pending || data.id !== pending.id || data.id !== revision) return;
@@ -79,7 +89,7 @@ worker.onmessage = ({ data }) => {
     else status('All fixes applied.');
   }
 };
-worker.onerror = (event) => { ready = false; pending = null; autoFix = false; $('check').disabled = true; $('fixall').disabled = true; status('Engine failed to load or stopped. Reload to retry.'); console.error(event.message); };
+if (worker) worker.onerror = (event) => { engineDead(); console.error(event.message); };
 text.addEventListener('input', () => { history = []; autoFix = false; invalidate(); status('Ready to check your changes.'); });
 $('check').onclick = check;
 $('fixall').onclick = () => {
