@@ -28,6 +28,44 @@ function missingEndPunctuation(text) {
   return /[\p{L}\p{N}]/u.test(trimmed.slice(-1));
 }
 
+// Purdue OWL and the TAMU Twelve Guidelines: one end mark per sentence, never a stack.
+// "?!" stays acceptable, so flag only doubled identical marks or runs of three or more.
+function repeatedEndMarkIssues(chars, issues) {
+  let i = 0;
+  while (i < chars.length) {
+    if (chars[i] !== '?' && chars[i] !== '!') { i += 1; continue; }
+    let j = i;
+    while (j < chars.length && (chars[j] === '?' || chars[j] === '!')) j += 1;
+    const uniform = chars[i] === chars[j - 1];
+    if (j - i >= 3 || (j - i === 2 && uniform)) {
+      issues.push({
+        kind: 'Punctuation',
+        start: i, end: j,
+        message: 'Use only one end punctuation mark.',
+        suggestions: [{ kind: 0, text: chars.slice(i, j).includes('?') ? '?' : '!' }],
+      });
+    }
+    i = j;
+  }
+}
+
+// A comma or colon must be followed by a space before the next word; the engine
+// already covers . ! ? ;. Digits stay untouched (1,000, 9:30), and URLs fail the
+// letter test on their own (https://).
+function missingSpaceIssues(chars, issues) {
+  for (let i = 0; i < chars.length - 1; i += 1) {
+    const mark = chars[i];
+    if (mark !== ',' && mark !== ':') continue;
+    if (!/\p{L}/u.test(chars[i + 1])) continue;
+    issues.push({
+      kind: 'Punctuation',
+      start: i + 1, end: i + 1,
+      message: `Add a space after the ${mark === ',' ? 'comma' : 'colon'}.`,
+      suggestions: [{ kind: 2, text: ' ' }],
+    });
+  }
+}
+
 onmessage = ({ data }) => {
   if (!linter) return;
   try {
@@ -61,15 +99,19 @@ onmessage = ({ data }) => {
         issues.push({ kind, start, end, message, suggestions });
       } finally { lint.free(); }
     }
-    // Suggest the missing period when punctuation mode leaves the text without an ending mark.
-    if (data.mode === 'punctuation' && missingEndPunctuation(data.text)) {
-      issues.push({
-        kind: 'Punctuation',
-        start: data.text.length,
-        end: data.text.length,
-        message: 'This text is missing its ending punctuation.',
-        suggestions: [{ kind: 2, text: '.' }],
-      });
+    if (data.mode === 'punctuation') {
+      repeatedEndMarkIssues(chars, issues);
+      missingSpaceIssues(chars, issues);
+      // Suggest the missing period when punctuation mode leaves the text without an ending mark.
+      if (missingEndPunctuation(data.text)) {
+        issues.push({
+          kind: 'Punctuation',
+          start: chars.length,
+          end: chars.length,
+          message: 'This text is missing its ending punctuation.',
+          suggestions: [{ kind: 2, text: '.' }],
+        });
+      }
     }
     postMessage({ type: 'results', id: data.id, issues });
   } catch (error) { postMessage({ type: 'error', id: data.id, error: String(error) }); }

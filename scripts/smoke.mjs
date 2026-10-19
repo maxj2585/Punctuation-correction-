@@ -35,7 +35,15 @@ try {
   await page.waitForFunction(() => [...document.querySelectorAll('.issue button')].some((b) => b.textContent === 'Apply: .'), { timeout: 30000 });
   await page.locator('.issue button').filter({ hasText: /^Apply: \.$/ }).first().click();
   await page.waitForFunction(() => document.querySelector('#text').value === 'This works.');
+  // Stacked end punctuation collapses to one mark, and a comma with no space after it gets one.
+  await page.fill('#text', 'wow!! he said hi,then left');
+  await page.click('#check');
+  await page.waitForSelector('.issue button', { timeout: 30000 });
+  await page.locator('.issue button').filter({ hasText: /^Apply: !$/ }).first().click();
+  await page.waitForFunction(() => document.querySelector('#text').value === 'wow! he said hi,then left');
+  await page.locator('.issue button').filter({ hasText: 'Add space' }).first().click();
+  await page.waitForFunction(() => document.querySelector('#text').value === 'wow! he said hi, then left');
   await page.setViewportSize({ width: 390, height: 844 });
   if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Mobile overflow');
-  console.log('Engine, grammar correction, undo, punctuation correction, and mobile layout passed.');
+  console.log('Engine, grammar correction, undo, punctuation correction, style-guide checks, and mobile layout passed.');
 } finally { await browser.close(); }

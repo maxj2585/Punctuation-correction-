@@ -27,21 +27,29 @@ worker.onmessage = ({ data }) => {
   $('check').disabled = false; $('check').textContent = 'Check text';
   if (data.type === 'error') { status('Checking failed. Try again.'); console.error(data.error); return; }
   $('results').replaceChildren();
+  // Worker spans count Unicode characters; strings count UTF-16 units. Map once per result.
+  const cps = Array.from(source);
+  const offsets = new Uint32Array(cps.length + 1);
+  for (let i = 0; i < cps.length; i++) offsets[i + 1] = offsets[i] + cps[i].length;
+  const to16 = (index) => offsets[Math.min(Math.max(index, 0), cps.length)];
   for (const issue of data.issues) {
     const card = document.createElement('article'); card.className = 'issue';
     const kind = document.createElement('small'); kind.textContent = issue.kind;
     const message = document.createElement('p'); message.textContent = issue.message;
-    const context = document.createElement('p'); context.textContent = `Passage: ${source.slice(Math.max(0, issue.start - 25), Math.min(source.length, issue.end + 25))}`;
+    const uStart = to16(issue.start), uEnd = to16(issue.end);
+    const context = document.createElement('p'); context.textContent = `Passage: ${source.slice(Math.max(0, uStart - 25), Math.min(source.length, uEnd + 25))}`;
     card.append(kind, message, context);
     const buttons = document.createElement('div'); buttons.className = 'buttons';
     for (const suggestion of issue.suggestions) {
       const button = document.createElement('button');
-      button.textContent = suggestion.kind === 1 ? 'Remove marked text' : `Apply: ${suggestion.text}`;
+      button.textContent = suggestion.kind === 1 ? 'Remove marked text'
+        : suggestion.kind === 2 && suggestion.text === ' ' ? 'Add space'
+        : `Apply: ${suggestion.text}`;
       button.addEventListener('click', () => {
         if (revision !== id || text.value !== source) return;
         history.push(source); if (history.length > 30) history.shift();
-        const start = suggestion.kind === 2 ? issue.end : issue.start;
-        text.value = source.slice(0, start) + suggestion.text + source.slice(issue.end);
+        const start = suggestion.kind === 2 ? uEnd : uStart;
+        text.value = source.slice(0, start) + suggestion.text + source.slice(uEnd);
         invalidate(); status('Correction applied.'); check();
       });
       buttons.append(button);
