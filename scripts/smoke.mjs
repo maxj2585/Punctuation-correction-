@@ -33,7 +33,7 @@ try {
   await page.fill('#text', 'This works..');
   await page.click('#check');
   await page.waitForFunction(() => [...document.querySelectorAll('.issue button')].some((b) => b.textContent === 'Apply: .'), { timeout: 30000 });
-  await page.locator('.issue button', { hasText: 'Apply: .' }).first().click();
+  await page.locator('.issue button').filter({ hasText: /^Apply: \.$/ }).first().click();
   await page.waitForFunction(() => document.querySelector('#text').value === 'This works.');
   await page.setViewportSize({ width: 390, height: 844 });
   if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Mobile overflow');
