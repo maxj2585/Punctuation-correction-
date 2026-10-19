@@ -42,7 +42,7 @@ function repeatedEndMarkIssues(chars, issues) {
         kind: 'Punctuation',
         start: i, end: j,
         message: 'Use only one end punctuation mark.',
-        suggestions: [{ kind: 0, text: chars.slice(i, j).includes('?') ? '?' : '!' }],
+        suggestions: [{ kind: 0, text: chars.slice(i, j).includes('?') ? '?' : '!', preferred: true }],
       });
     }
     i = j;
@@ -56,12 +56,12 @@ function repeatedEndMarkIssues(chars, issues) {
 function missingSpaceIssues(chars, issues) {
   const covered = new Set(issues
     .filter(({ suggestions }) => suggestions.some((s) => s.kind === 2 && s.text === ' '))
-    .map((issue) => issue.start));
+    .flatMap((issue) => [issue.start, issue.end]));
   for (let i = 0; i < chars.length - 1; i += 1) {
     const mark = chars[i];
     if (mark !== ',' && mark !== ':') continue;
     if (!/\p{L}/u.test(chars[i + 1])) continue;
-    if (covered.has(i + 1)) continue;
+    if (covered.has(i) || covered.has(i + 1)) continue;
     issues.push({
       kind: 'Punctuation',
       start: i + 1, end: i + 1,
@@ -98,7 +98,7 @@ onmessage = ({ data }) => {
           // "word.." at the end of a sentence needs one dot, not three;
           // offer the single-dot fix next to the engine's ellipsis suggestion.
           if (flagged === '..' && suggestions.some((s) => s.text === '...')) {
-            suggestions.push({ kind: 0, text: '.' });
+            suggestions.push({ kind: 0, text: '.', preferred: true });
           }
         }
         issues.push({ kind, start, end, message, suggestions });
@@ -114,7 +114,7 @@ onmessage = ({ data }) => {
           start: chars.length,
           end: chars.length,
           message: 'This text is missing its ending punctuation.',
-          suggestions: [{ kind: 2, text: '.' }],
+          suggestions: [{ kind: 2, text: '.', preferred: true }],
         });
       }
     }

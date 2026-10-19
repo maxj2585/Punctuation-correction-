@@ -43,6 +43,10 @@ try {
   await page.waitForFunction(() => document.querySelector('#text').value === 'wow! he said hi,then left');
   await page.locator('.issue button').filter({ hasText: 'Add space' }).first().click();
   await page.waitForFunction(() => document.querySelector('#text').value === 'wow! he said hi, then left');
+  // One press on Fix all walks every suggestion to a fully cleaned sentence.
+  await page.fill('#text', 'wow!! he said hi,then left');
+  await page.click('#fixall');
+  await page.waitForFunction(() => document.querySelector('#text').value === 'Wow! he said hi, then left.', { timeout: 60000 });
   await page.setViewportSize({ width: 390, height: 844 });
   if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error('Mobile overflow');
   console.log('Engine, grammar correction, undo, punctuation correction, style-guide checks, and mobile layout passed.');
