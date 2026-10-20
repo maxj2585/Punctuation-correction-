@@ -11,7 +11,7 @@ This address is not proof of deployment; check the workflow's deployment output 
 
 ## Interface
 
-Responsive editor, punctuation/spacing or all-checks mode, per-suggestion corrections, up to 30 correction undo states, copy, examples, and word/character counts. Text stays on-device in a background worker. No draft storage or analytics is implemented. Maximum input is 50,000 UTF-16 code units. Initial loading needs the internet; offline caching is not implemented. Suggestions need human review; category filtering may omit punctuation-related grammar checks.
+Responsive editor, punctuation/spacing or all-checks mode, per-suggestion corrections, up to 30 correction undo states, copy, examples, and word/character counts. Text stays on-device in a background worker. No draft storage or analytics is implemented. Maximum input is 50,000 UTF-16 code units. Missing periods, commas, question marks, and colons inside pasted text are restored by an on-device model (kredor/punctuate-all, ONNX, loaded through Transformers.js from jsDelivr and Hugging Face). It downloads once, about 270 MB, on the first check and is cached by the browser; text never leaves the device. If it cannot load, the Harper checks still run. Suggestions need human review; category filtering may omit punctuation-related grammar checks.
 
 ## Build locally
 
