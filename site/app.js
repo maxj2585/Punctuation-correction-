@@ -4,7 +4,7 @@ if ('serviceWorker' in navigator) {
 }
 const text = $('text');
 let worker = null;
-try { worker = new Worker(new URL('./worker.js?v=8', import.meta.url), { type: 'module' }); }
+try { worker = new Worker(new URL('./worker.js?v=9', import.meta.url), { type: 'module' }); }
 catch { worker = null; }
 let ready = false, revision = 0, pending = null, history = [], autoFix = false, fixBudget = 0;
 const status = (message) => { $('status').textContent = message; };
@@ -30,7 +30,7 @@ function check() {
   if (!text.value.trim()) { status('Add some text first.'); return; }
   const id = ++revision;
   pending = { id, source: text.value };
-  $('check').disabled = true; $('check').textContent = 'Checking…';
+  $('check').disabled = true; $('check').textContent = 'Checking…'; $('fixall').disabled = true;
   status(autoFix ? 'Fixing everything on your device…' : 'Checking on your device…');
   worker.postMessage({ id, text: text.value, mode: $('mode').value });
 }
@@ -42,10 +42,11 @@ function applyFix(source, uStart, uEnd, suggestion) {
 }
 if (worker) worker.onmessage = ({ data }) => {
   if (data.type === 'ready') { ready = true; invalidate(); status('Ready. Your writing stays on your device.'); return; }
+  if (data.type === 'status') { status(data.message); return; }
   if (data.type === 'fatal') { autoFix = false; status('Engine could not load. Reload to retry.'); console.error(data.error); return; }
   if (!pending || data.id !== pending.id || data.id !== revision) return;
   const { source, id } = pending; pending = null;
-  $('check').disabled = false; $('check').textContent = 'Check text';
+  $('check').disabled = false; $('check').textContent = 'Check text'; $('fixall').disabled = false;
   if (data.type === 'error') { autoFix = false; status('Checking failed. Try again.'); console.error(data.error); return; }
   $('results').replaceChildren();
   // Worker spans count Unicode characters; strings count UTF-16 units. Map once per result.
@@ -80,12 +81,27 @@ if (worker) worker.onmessage = ({ data }) => {
   status(`${data.issues.length} suggestion${data.issues.length === 1 ? '' : 's'} found.`);
   if (window.innerWidth <= 760 && data.issues.length) $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
   if (autoFix) {
-    if (data.issues.length && fixBudget > 0) {
+    // Apply every non-overlapping preferred fix in one pass (right to left so
+    // earlier offsets stay valid), then re-check; a few rounds settle chains
+    // like "add period" → "capitalize the next word".
+    const picks = mapped
+      .map((m) => ({ ...m, pick: m.suggestions.find((s) => s.preferred) || m.suggestions[0] }))
+      .filter((m) => m.pick)
+      .sort((x, y) => y.uStart - x.uStart || y.uEnd - x.uEnd);
+    if (picks.length && fixBudget > 0) {
       fixBudget -= 1;
-      const first = mapped[0];
-      const pick = first.suggestions.find((s) => s.preferred) || first.suggestions[0];
-      applyFix(source, first.uStart, first.uEnd, pick);
-      return;
+      let value = source, floor = Infinity, applied = 0;
+      for (const m of picks) {
+        if (m.uEnd > floor || (m.uEnd === floor && (m.uStart !== m.uEnd || applied))) continue;
+        const at = m.pick.kind === 2 ? m.uEnd : m.uStart;
+        value = value.slice(0, at) + m.pick.text + value.slice(m.uEnd);
+        floor = m.uStart; applied += 1;
+      }
+      if (applied && value !== source) {
+        history.push(source); if (history.length > 30) history.shift();
+        text.value = value; invalidate(); check();
+        return;
+      }
     }
     autoFix = false;
     if (data.issues.length) status(`Applied what it could. ${data.issues.length} suggestion${data.issues.length === 1 ? '' : 's'} need your choice.`);
@@ -99,7 +115,7 @@ $('fixall').onclick = () => {
   if (!ready) return;
   if (pending) { status('Still checking…'); return; }
   if (!text.value.trim()) { status('Add some text first.'); return; }
-  autoFix = true; fixBudget = 30; check();
+  autoFix = true; fixBudget = 8; check();
 };
 $('mode').onchange = () => { autoFix = false; invalidate(); status('Mode changed. Check again.'); };
 $('clear').onclick = () => { autoFix = false; text.value = ''; history = []; invalidate(); status('Text cleared.'); };
