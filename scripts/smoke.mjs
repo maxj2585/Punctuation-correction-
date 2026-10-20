@@ -10,7 +10,8 @@ try {
   await page.selectOption('#mode', 'all');
   await page.fill('#text', 'The the problem is here.');
   await page.click('#check');
-  await page.waitForSelector('.issue button', { timeout: 30000 });
+  // First check downloads the punctuation model (about 270 MB), so allow extra time.
+  await page.waitForSelector('.issue button', { timeout: 300000 });
   await page.locator('.issue button').first().click();
   await page.waitForFunction(() => document.querySelector('#text').value === 'The problem is here.');
   await page.click('#undo');
@@ -45,6 +46,10 @@ try {
   await page.waitForFunction(() => document.querySelector('#text').value === 'wow! he said hi,then left');
   await page.locator('.issue button').filter({ hasText: 'Add space' }).first().click();
   await page.waitForFunction(() => document.querySelector('#text').value === 'wow! he said hi, then left');
+  // Pasted run-on text gets its missing commas, periods, and question mark inserted.
+  await page.fill('#text', 'i went to the store yesterday and i bought some milk eggs and bread then i went home how are you doing today');
+  await page.click('#fixall');
+  await page.waitForFunction(() => document.querySelector('#text').value === 'I went to the store yesterday and I bought some milk, eggs, and bread. Then I went home. How are you doing today?', { timeout: 120000 });
   // One press on Fix all walks every suggestion to a fully cleaned sentence.
   await page.fill('#text', 'wow!! he said hi,then left');
   await page.click('#fixall');
