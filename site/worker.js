@@ -1,4 +1,5 @@
 import init, { Linter, Dialect, Language } from './engine/harper_wasm.js';
+import { punctuationIssues, loadPunctuationModel } from './punct.js?v=9';
 let linter;
 try { await init(); linter = Linter.new(Dialect.American); postMessage({ type: 'ready' }); }
 catch (error) { postMessage({ type: 'fatal', error: String(error) }); }
@@ -71,12 +72,39 @@ function missingSpaceIssues(chars, issues) {
   }
 }
 
-onmessage = ({ data }) => {
+let modelState = 'idle'; // idle | loading | ready | failed
+async function addRestoredPunctuation(text, chars, issues) {
+  if (modelState === 'failed') return false;
+  if (modelState === 'idle') {
+    modelState = 'loading';
+    postMessage({ type: 'status', message: 'Downloading the punctuation model (one time, about 270 MB)…' });
+  }
+  try {
+    const restored = await punctuationIssues(text, chars);
+    modelState = 'ready';
+    const taken = new Set(issues.map((issue) => issue.start).concat(issues.map((issue) => issue.end)));
+    let coversEnd = false;
+    for (const issue of restored) {
+      if (taken.has(issue.start)) continue;
+      if (issue.last) coversEnd = true;
+      delete issue.last;
+      issues.push(issue);
+    }
+    return coversEnd;
+  } catch (error) {
+    modelState = 'failed';
+    console.error('Punctuation model unavailable.', error);
+    postMessage({ type: 'status', message: 'The punctuation model could not load, so only the basic checks ran.' });
+    return false;
+  }
+}
+
+onmessage = async ({ data }) => {
   if (!linter) return;
   try {
     const raw = linter.lint(data.text, Language.Plain, false, undefined, true, false);
     // Harper spans count Unicode characters, so slice by code point.
-    const chars = data.mode === 'punctuation' ? Array.from(data.text) : null;
+    const chars = Array.from(data.text);
     const issues = [];
     for (const lint of raw) {
       try {
@@ -104,11 +132,13 @@ onmessage = ({ data }) => {
         issues.push({ kind, start, end, message, suggestions });
       } finally { lint.free(); }
     }
+    // Missing periods, commas, and question marks inside the text (all modes).
+    const modelCoversEnd = await addRestoredPunctuation(data.text, chars, issues);
     if (data.mode === 'punctuation') {
       repeatedEndMarkIssues(chars, issues);
       missingSpaceIssues(chars, issues);
-      // Suggest the missing period when punctuation mode leaves the text without an ending mark.
-      if (missingEndPunctuation(data.text)) {
+      // Suggest the missing period when nothing else already ends the text.
+      if (!modelCoversEnd && missingEndPunctuation(data.text)) {
         issues.push({
           kind: 'Punctuation',
           start: chars.length,
@@ -118,6 +148,7 @@ onmessage = ({ data }) => {
         });
       }
     }
+    issues.sort((a, b) => a.start - b.start || a.end - b.end);
     postMessage({ type: 'results', id: data.id, issues });
   } catch (error) { postMessage({ type: 'error', id: data.id, error: String(error) }); }
 };
