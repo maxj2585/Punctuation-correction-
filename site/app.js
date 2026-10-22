@@ -4,7 +4,7 @@ if ('serviceWorker' in navigator) {
 }
 const text = $('text');
 let worker = null;
-try { worker = new Worker(new URL('./worker.js?v=9', import.meta.url), { type: 'module' }); }
+try { worker = new Worker(new URL('./worker.js?v=10', import.meta.url), { type: 'module' }); }
 catch { worker = null; }
 let ready = false, revision = 0, pending = null, history = [], autoFix = false, fixBudget = 0;
 const status = (message) => { $('status').textContent = message; };
@@ -18,7 +18,7 @@ setTimeout(() => { if (!ready) status('Still loading the engine. If this message
 if (!worker) engineDead();
 function invalidate() {
   revision++; pending = null;
-  $('check').disabled = !ready; $('check').textContent = ready ? 'Check text' : 'Loading engine…';
+  $('check').disabled = !ready; $('check').textContent = ready ? 'Correct text' : 'Loading engine…';
   $('fixall').disabled = !ready;
   $('undo').disabled = !history.length;
   const value = text.value;
@@ -30,7 +30,7 @@ function check() {
   if (!text.value.trim()) { status('Add some text first.'); return; }
   const id = ++revision;
   pending = { id, source: text.value };
-  $('check').disabled = true; $('check').textContent = 'Checking…'; $('fixall').disabled = true;
+  $('check').disabled = true; $('check').textContent = 'Correcting…'; $('fixall').disabled = true;
   status(autoFix ? 'Fixing everything on your device…' : 'Checking on your device…');
   worker.postMessage({ id, text: text.value, mode: $('mode').value });
 }
@@ -46,7 +46,7 @@ if (worker) worker.onmessage = ({ data }) => {
   if (data.type === 'fatal') { autoFix = false; status('Engine could not load. Reload to retry.'); console.error(data.error); return; }
   if (!pending || data.id !== pending.id || data.id !== revision) return;
   const { source, id } = pending; pending = null;
-  $('check').disabled = false; $('check').textContent = 'Check text'; $('fixall').disabled = false;
+  $('check').disabled = false; $('check').textContent = 'Correct text'; $('fixall').disabled = false;
   if (data.type === 'error') { autoFix = false; status('Checking failed. Try again.'); console.error(data.error); return; }
   $('results').replaceChildren();
   // Worker spans count Unicode characters; strings count UTF-16 units. Map once per result.
@@ -110,14 +110,20 @@ if (worker) worker.onmessage = ({ data }) => {
 };
 if (worker) worker.onerror = (event) => { engineDead(); console.error(event.message); };
 text.addEventListener('input', () => { history = []; autoFix = false; invalidate(); status('Ready to check your changes.'); });
-$('check').onclick = check;
-$('fixall').onclick = () => {
+// Correct text and Fix all both apply every fix automatically, then list anything left.
+function correctAll() {
   if (!ready) return;
   if (pending) { status('Still checking…'); return; }
   if (!text.value.trim()) { status('Add some text first.'); return; }
   autoFix = true; fixBudget = 8; check();
+}
+$('check').onclick = correctAll;
+$('fixall').onclick = correctAll;
+// Picking a checking mode corrects the text in that mode right away.
+$('mode').onchange = () => {
+  autoFix = false; invalidate();
+  if (ready && text.value.trim()) correctAll(); else status('Mode changed.');
 };
-$('mode').onchange = () => { autoFix = false; invalidate(); status('Mode changed. Check again.'); };
 $('clear').onclick = () => { autoFix = false; text.value = ''; history = []; invalidate(); status('Text cleared.'); };
 $('example').onclick = () => { autoFix = false; text.value = 'Hello , world! This is a sentence.. The the problem is here.'; history = []; invalidate(); };
 $('undo').onclick = () => { if (!history.length) return; text.value = history.pop(); invalidate(); status('Correction undone.'); };
