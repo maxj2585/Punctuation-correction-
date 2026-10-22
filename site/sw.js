@@ -1,11 +1,11 @@
 // Offline cache for Punctuation Studio. After the first visit the whole app,
 // including the engine, loads from this cache when the device is offline.
-const VERSION = 'studio-v9';
+const VERSION = 'studio-v10';
 const CORE = [
   './',
   './index.html',
-  './app.js?v=9',
-  './worker.js?v=9',
+  './app.js?v=10',
+  './worker.js?v=10',
   './punct.js?v=9',
   './engine/harper_wasm.js',
   './engine/harper_wasm_bg.wasm',
